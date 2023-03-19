@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h1>{% block title %} Create a New User {% endblock %}</h1>
+
+<form method="post">
+  <div class="form-group">
+      <label for="username">Username</label>
+      <input type="text" name="username"
+             placeholder="Chose a username" class="form-control"
+             value="{{ request.form['username'] }}"></input>
+  </div>
+
+    <div class="form-group">
+        <label for="email">Email</label>
+        <input type="text" name="email"
+               placeholder="Enter your email" class="form-control"
+               value="{{ request.form['email'] }}"></input>
+    </div>
+
+    <div class="form-group">
+        <label for="password">Password</label>
+        <input type="password" name="password"
+               placeholder="Enter your password" class="form-control"
+               value="{{ request.form['password'] }}"></input>
+    </div>
+
+    <div class="form-group">
+        <label for="password_check">Re-enter password</label>
+        <input type="password" name="password_check"
+               placeholder="Re-enter your password" class="form-control"
+               value="{{ request.form['password_check'] }}"></input>
+    </div>
+
+    <div class="form-group">
+        <button type="submit" class="btn btn-primary">Submit</button>
+    </div>
+</form>
+{% endblock %}
