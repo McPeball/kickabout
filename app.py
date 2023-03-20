@@ -3,7 +3,29 @@ import time
 from flask import Flask, render_template, request, url_for, flash, redirect, make_response
 from werkzeug.exceptions import abort
 from hashlib import sha256
+import json
+import urllib3
+#import matplotlib.pyplot as plt
+import pandas as pd
+import numpy as np
+#import seaborn as sb
 
+# football API parameters
+competition = "PL"
+#competition = "ELC"
+token = 'a69bfd1640b141c2b5846be23e97a08b'
+#season_filter = "?season=2020"
+season_filter = "?season=2021"
+
+
+
+# function to query football API
+http = urllib3.PoolManager()
+def get_data(query, token):
+    r = http.request('GET', 'api.football-data.org' + query, headers = { 'X-Auth-Token': token })
+    return(json.loads(r.data))
+
+# connect to SQL db
 def get_db_connection():
     conn = sqlite3.connect('database.db')
     conn.row_factory = sqlite3.Row
@@ -25,7 +47,12 @@ def testing():
     else:
         return render_template('test.html')
 
-
+@app.route("/test_API", methods=('GET', 'POST'))
+def test_API():
+    teams = get_data(f"/v2/competitions/{competition}/teams{season_filter}", token)
+    #matches = (get_data(f'/v2/competitions/{competition}/matches{season_filter}', token))
+    teams_df = pd.json_normalize(teams, record_path =['teams'])
+    return render_template('test_API.html', tables=[teams_df.to_html(classes='data')], titles=teams_df.columns.values)
 @app.route("/sign_up", methods=('GET', 'POST'))
 def sign_up():
     if request.method == 'POST':
