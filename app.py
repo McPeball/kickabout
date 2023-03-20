@@ -68,4 +68,21 @@ def sign_in():
         username = request.form['username']
         password = request.form['password']
 
-        return render_template('sign_in.html')
+        conn = get_db_connection()
+        row = conn.execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
+        conn.close()
+
+        username_in_db = row[1]
+        pw_hash_in_db = row[3]
+        salt = row[4]
+        current_cookie = row[5]
+        pw_hash = sha256((salt + password).encode('utf-8')).hexdigest()
+        if pw_hash_in_db == pw_hash:
+            resp = make_response(render_template('index.html'))
+            resp.set_cookie('username', username_in_db)
+            resp.set_cookie('current_cookie', current_cookie)
+            flash('login successful')
+            return resp
+        else:
+            flash('login failed. Please try again')
+            return render_template('sign_in.html')
