@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h1>{% block title %} Choose data visualisation {% endblock %}</h1>
+<!-- don't need to tell the  form where to go because the buttons have their own formaction -->
+<form method="post">
+  <div style="position: relative">
+    <div style="width: 50%; margin-left: 0; margin-right: auto; float: left">
+      <div style="padding-top: 30px; padding-right: 30px; padding-bottom: 30px; padding-left: 30px; position: relative; float: left; margin-left: 0; margin-right: auto;">
+        <label for="competition"> select a competition:</label>
+          <select name="competition" id="competition">
+            <option value="PL">English Premier League</option>
+            <option value="ECL">English Championship League</option>
+          </select>
+      </div>
+      <div style="padding-top: 30px; padding-right: 30px; padding-bottom: 30px; padding-left: 30px; position: relative; margin-left: 0; margin-right: auto;">
+        <label for="season"> select a season:</label>
+          <select name="season" id="season">
+            <option value="2020"> 2020</option>
+            <option value="2021"> 2021</option>
+            <option value="2022"> 2022</option>
+            <option value="2023"> 2023</option>
+          </select>
+      </div>
+      <div style="padding-top: 30px; padding-right: 30px; padding-bottom: 30px; padding-left: 30px; position: relative; margin-left: 0; margin-right: auto;">
+         <fieldset>
+            <legend>pick teams</legend>
+            {% for team in teams %}
+            <input type="checkbox" name="team" value="{{team}}"> {{team}}<br>
+            {% endfor %}
+          </fieldset>
+      </div>
+    </div>
+    <div style="width: 50%; margin-left: auto; margin-right: 0; float: right">
+      <div style="padding-top: 30px; padding-right: 30px; padding-bottom: 30px; padding-left: 30px; position: relative; margin-left: auto; margin-right: 0;">
+          <h5>Plot goal difference across matchdays</h5>
+          <img src="/static/images/show_plot_gd_matchday.png" width="250" height="200"><br/>
+          <button type="submit" name="gd_matchday" class="btn btn-primary" formaction="/show_plot_gd_matchday"> plot gd-md </button>
+      </div>
+      <div style="padding-top: 30px; padding-right: 30px; padding-bottom: 30px; padding-left: 30px; position: relative; margin-left: auto; margin-right: 0;">
+          <h5>Plot goals for versus goals against</h5>
+          <img src="/static/images/show_plot_gf_ga.png" width="250" height="200"><br/>
+          <button type="submit" name="gf_ga" class="btn btn-primary" formaction="/show_plot_gf_ga"> plot gf-ga </button>
+      </div>
+      <div style="padding-top: 30px; padding-right: 30px; padding-bottom: 30px; padding-left: 30px; position: relative; margin-left: auto; margin-right: 0;">
+          <h5>Plot goal difference in home and away games</h5>
+          <img src="/static/images/show_plot_gd_home_away.png" width="250" height="200"><br/>
+          <button type="submit" name="gd_ha" class="btn btn-primary" formaction="/show_plot_gd_home_away"> plot gd-h/a </button>
+      </div>
+    </div>
+  </div>
+  </form>
+{% endblock %}
+
+show_plot_gd_home_away.png
+
+show_plot_gf_ga.png

@@ -4,6 +4,7 @@
 <h1>{% block title %} Sign in {% endblock %}</h1>
 
 <form method="post">
+  <input type="hidden" name="taget_page" value="{{ request.args.get('next', '') }}"/>
     <div class="form-group">
         <label for="username">Username</label>
         <input type="text" name="username"
@@ -17,9 +18,6 @@
                placeholder="Enter your password" class="form-control"
                value="{{ request.form['password'] }}"></input>
     </div>
-
-
-
     <div class="form-group">
         <button type="submit" class="btn btn-primary">Submit</button>
     </div>
