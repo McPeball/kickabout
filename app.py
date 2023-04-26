@@ -7,18 +7,23 @@ import json
 import urllib3
 from matplotlib.figure import Figure
 import pandas as pd
-import numpy as np
-#import seaborn as sb
 import base64
 from io import BytesIO
 from functools import wraps
-
+import smtplib, ssl
 
 
 
 token = 'a69bfd1640b141c2b5846be23e97a08b'
 
-# function to query football API
+''' 
+
+This section contains functions to: 
+    get data from the web API
+    interact with SQL database
+
+'''
+
 http = urllib3.PoolManager()
 def get_data(query, token):
     """creates http request
@@ -45,9 +50,9 @@ def make_match_df(competition, season):
     """
     season_filter = r"?season=" + str(season)
     matches = (get_data(f'/v2/competitions/{competition}/matches{season_filter}', token))
-    #return matches
+    if matches is None:
+        flash("No data was returned from the API")
     matches_df = pd.json_normalize(matches, record_path = ['matches'])
-    matches_df.to_csv("matches_pl_2020.tsv", sep="\t")
     return matches_df
 
 def get_results_from_API(username, competition, season):
@@ -62,11 +67,8 @@ def get_results_from_API(username, competition, season):
       TypeError: if called  without positional arguments
     """
     matches_df = make_match_df(competition, season)
-    #return matches_df
     # create a results data frame - accumulate data in a list of lists first
     data_for_results = []
-
-    #matches_df = matches_df.reset_index()  # make sure indexes pair with number of rows
     for index, row in matches_df.iterrows():
         # who won?
         home_team_result = int(0)
@@ -140,7 +142,6 @@ def put_results_into_db(username, competition, season):
     conn = get_db_connection()
     results = get_results_from_API(username, competition, season)
     for index, row in results.iterrows():
-        #return str(row['status'])
         conn.execute('INSERT INTO matches (username, competition, season, matchday, status, team_name, team_id, result, gd, gf, ga, home_away) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
             (username,
             competition,
@@ -193,10 +194,6 @@ def get_results_from_db(username, competition, season):
             match['home_away']
             ])
     results = pd.DataFrame(data_for_results, columns=['username', 'competition', 'season', 'matchday', 'status', 'team_name', 'team_id', 'result', 'gd', 'gf', 'ga', 'home_away'])
-    if results.shape[0] == 0:
-        # if no data, return False
-        return False
-    results.to_csv("results_PL_2020.tsv", sep="\t")
     return results
 
 def get_db_connection():
@@ -212,10 +209,49 @@ def get_db_connection():
     conn.row_factory = sqlite3.Row
     return conn
 
+''' 
+
+This section contains:
+    a function to send an email to a user
+    a decorator function to check for a valid cookie to prevent access to restricted pages
+
+'''
+
+def send_email(username, email, cookie):
+    """Sends an email to user with verification link
+    Args:
+      username: users login name
+      email: users email address
+      cookie: current cookie value stored in database
+    Returns:
+      N/A
+    Raises:
+      TypeError: if called  without positional arguments
+    """
+    # port 465 for SSL
+    port = 465
+    # app password from google https://myaccount.google.com/apppasswords
+    password = "xgdubvfyvwfvqwfv"
+    
+    # Create a secure SSL context
+    context = ssl.create_default_context()
+    
+    with smtplib.SMTP_SSL("smtp.gmail.com", port, context=context) as server:
+        server.login("Kickabout.Development@gmail.com", password)
+        sender_email = "Kickabout.development@gmail.com"
+        message = """\
+Subject: Kickabout
+
+Please verify your kickabout login by clicking the following link.
+http://192.168.1.214:5001/verify-email?user={0}&cookie={1}
+Thanks, the Kickabout Developer
+        """
+        server.sendmail(sender_email, email, message.format(username, cookie))
+
 def check_login(f):
     """checks users login matches the original sign up
     Args:
-      f:
+      f: function to be decorated
     Returns:
       sign in request as args and kwargs
     Raises:
@@ -228,14 +264,34 @@ def check_login(f):
           *args:
           **kwargs: key word args
         Returns:
-          result from decorated_function, if usernames don't match then the user is redirected
+          result from decorated_function, if usernames don't match then the user is redirected back to sign in page
         Raises:
           TypeError: if called  without positional arguments
         """
         if request.cookies.get("username") is None:
             return redirect(url_for('sign_in', next=request.url))
+        else:
+            username = request.cookies.get('username')
+            cookie = request.cookies.get('current_cookie')
+            conn = get_db_connection()
+            row = conn.execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
+            conn.close()
+            
+            if row is None:
+                return redirect(url_for('sign_in', next=request.url))
+            username_in_db = row[1]
+            current_cookie = row[5]
+            if ((current_cookie != cookie) or (username_in_db != username)):
+                return redirect(url_for('sign_in', next=request.url))
+                
         return f(*args, **kwargs)
     return decorated_function
+
+''' 
+
+This section contains functions used for the main web application
+
+'''
 
 app = Flask(__name__)
 
@@ -261,45 +317,23 @@ def get_match_data():
       if GET then displays drop down of competition or season, else (POST) displays show_table.html
     """
     if request.method == "GET":
-        username = request.cookies.get("username")
-        conn = get_db_connection()
-        curs = conn.cursor()
-        # Notes
-        # this if block could show data if it exists in DB - otherwise,
-        # it is currently checking for results but always showing the
-        # form to get data (drop down web form)
-        matches = curs.execute("SELECT * FROM matches WHERE username=?", (username,)).fetchall()
-        conn.close
-        match_count = 0
-        for match in matches:
-            match_count += 1
-        #return "Match count is "+str(match_count)
-        #if match_count == 0:
-        #    return "<h1> nothing in database"
-        #else:
-        #    return "somethig in database" #+ str(match_count)
         return render_template("get_data.html")
     else:
         username = request.cookies.get("username")
         competition = request.form["competition"]
         season = request.form["season"]
-        #return '>'+request.form["competition"]+'<>'+request.form["season"]+'<'
         results = put_results_into_db(username, competition, season)
-        #results = pd.DataFrame(columns=['matchday', 'status', 'team_name', 'team_id', 'result', 'gd', 'gf', 'ga', 'home_away'])
         return render_template('show_table.html', tables=[results.to_html(classes='data')], titles=results.columns.values)
 
-
-
-@app.route('/select_data_to_show', methods=("GET", "POST"))
+@app.route('/select_data_to_show', methods=("GET",))
 @check_login
 def select_data_to_show():
     """collects teams to plot
     Args:
       None
-    Returns:
+    Returns:O
       rendered html with teams to plot
     """
-    # NEED TO POPULATE FORM WITH COMPETITION AND SEASON IN DB!!!!!
     if request.method == "GET":
         # insert webform here:
         # get teams
@@ -313,13 +347,6 @@ def select_data_to_show():
         for match in matches:
             teams.add(match["team_name"])
         return render_template("select_data_to_show.html", teams=sorted(teams))
-
-@app.route("/show_table", methods=('GET', 'POST'))
-@check_login
-def show_table():
-    #results = get_results_from_db()
-    #return render_template('show_table.html', tables=[results.to_html(classes='data')], titles=results.columns.values
-    return True
 
 @app.route("/show_plot_gd_matchday", methods=("POST", "GET"))
 @check_login
@@ -354,7 +381,7 @@ def show_plot_gd_matchday():
     # Add a legend
     ax.legend()
 
-    # makes the plot will the canvas better
+    # makes the plot fit the canvas better
     fig.tight_layout()
 
     # open a BytesIO buffer object, save the file to the buffer and base64-encode the bytes to ascii
@@ -380,34 +407,19 @@ def show_plot_gf_ga():
     username = request.cookies.get("username")
     results = get_results_from_db(username, competition, season)
     df_for_plot = results[results["team_name"].isin(teams)]
-
-    # Create a figure canvas to hold the plot
     fig = Figure()
-
-    # Add a single Axes object (with x and y axes)
     ax = fig.subplots()
-
-    # for each time, add an x-y scatter plot. Use label=team to identify it for the legend
     for team in teams:
         ax.scatter(df_for_plot.loc[df_for_plot['team_name'] == team, "gf"], df_for_plot.loc[df_for_plot['team_name'] == team, "ga"], alpha=0.5, label=team)
-
-    # Set the x and y axis labels
     ax.set_xlabel('Goals for', fontsize=15)
     ax.set_ylabel('Goals against', fontsize=15)
-
-    # Add a legend
     ax.legend()
-
-    # makes the plot will the canvas better
     fig.tight_layout()
-
-    # open a BytesIO buffer object, save the file to the buffer and base64-encode the bytes to ascii
     img = BytesIO()
     fig.savefig(img, format="png")
     data = base64.b64encode(img.getbuffer()).decode("ascii")
 
     return render_template('show_plot.html', plot_url=data, title="Plot GF and GA")
-
 
 @app.route("/show_plot_gd_home_away", methods=('POST', "GET"))
 @check_login
@@ -424,14 +436,8 @@ def show_plot_gd_home_away():
     username = request.cookies.get("username")
     results = get_results_from_db(username, competition, season)
     df_for_plot = results[results["team_name"].isin(teams)]
-
-    # Create a figure canvas to hold the plot
     fig = Figure()
-
-    # Add a single Axes object (with x and y axes)
     ax = fig.subplots()
-
-    # for each time, add an x-y scatter plot. Use label=team to identify it for the legend
     for team in teams:
         ax.scatter(
             df_for_plot.loc[df_for_plot['team_name'] == team, "home_away"],
@@ -439,17 +445,10 @@ def show_plot_gd_home_away():
             alpha=0.1,
             label=team
             )
-    # Set the x and y axis labels
     ax.set_xlabel('Location', fontsize=15)
     ax.set_ylabel('Goal difference', fontsize=15)
-
-    # Add a legend
     ax.legend()
-
-    # makes the plot will the canvas better
     fig.tight_layout()
-
-    # open a BytesIO buffer object, save the file to the buffer and base64-encode the bytes to ascii
     img = BytesIO()
     fig.savefig(img, format="png")
     data = base64.b64encode(img.getbuffer()).decode("ascii")
@@ -465,7 +464,9 @@ def sign_up():
       if GET, renders a form to collect information
       if POST, creates a salted password hash and stores it into users DB table
     """
-    if request.method == 'POST':
+    if request.method == 'GET':
+        return render_template('create_user.html')
+    else:
         username = request.form['username']
         email = request.form['email']
         password = request.form['password']
@@ -474,24 +475,29 @@ def sign_up():
         conn = get_db_connection()
         users = conn.execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
         conn.close
-
-        if users == username:
-            flash('user already exists')
-        elif password != password_check:
+        
+        if password != password_check:
             flash('password entries do not match')
-        else:
+            return render_template('create_user.html')
+        elif users is None:
+            # if users is None then the user does not already exist in the data base and can be created
             pw_hash = sha256((salt + password).encode('utf-8')).hexdigest()
             current_cookie = sha256((salt + password + str(time.time())).encode('utf-8')).hexdigest()
             conn = get_db_connection()
-            #conn = sqlite3.connect('database.db')
             conn.execute("INSERT INTO users (username, email, salt, pw_hash, current_cookie) VALUES (?, ?, ?, ?, ?)",
                 (username, email, salt, pw_hash, current_cookie))
             conn.commit()
             conn.close()
-        flash('new user created')
-        return render_template('index.html')
-    else:
-        return render_template('create_user.html')
+            try:
+                send_email(username, email, current_cookie)
+            except:
+                flash('Sorry, please enter a valid email address')
+                return render_template('create_user.html')
+            flash('new user created please check your email')
+            return render_template('index.html')
+        elif users["username"] == username:
+            flash('Sorry that user already exists. Please choose a different username')
+            return render_template('create_user.html')
 
 
 @app.route("/sign_in", methods=("GET", "POST"))
@@ -515,7 +521,9 @@ def sign_in():
         conn = get_db_connection()
         row = conn.execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
         conn.close()
-        
+        if row is None:
+            flash('Sorry we do not recognise that user')
+            return render_template('sign_in.html')
         username_in_db = row[1]
         pw_hash_in_db = row[3]
         salt = row[4]
@@ -537,3 +545,90 @@ def sign_in():
         else:
             flash('login failed. Please try again')
             return render_template('sign_in.html')
+
+@app.route("/verify-email", methods=("GET", "POST"))
+def verify_email():
+    """updates the email verification status in the database
+    Args:
+      None - but arguments received from request.args in the url
+    Returns:
+      render template for sign in if the request argument details are valid
+      render template for sign up if the request argument details are not valid
+    """
+    username = request.args.get('user')
+    cookie = request.args.get('cookie')
+    conn = get_db_connection()
+    row = conn.execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
+    conn.close()
+    if row is None:
+        flash('Sorry we do not recognise that user')
+        return render_template('create_user.html')
+    username_in_db = row[1]
+    current_cookie = row[5]
+    if ((username_in_db == username) and (current_cookie == cookie)):
+        conn = get_db_connection()
+        curs = conn.cursor()
+        curs.execute("UPDATE users SET email_verification = 1 WHERE username = ?", (username,))
+        conn.commit()
+        flash('Congratulations, your email has been verified')
+        return redirect(url_for('sign_in'))
+    else:
+        flash("Unfortunately, we don't recognise those details - please check your email or create a new account")
+        return render_template('create_user.html')
+
+@app.route("/reset_password", methods=("GET", "POST"))
+def reset_password():
+    """allows user to update stored password in database
+    Args:
+      None
+    Returns:
+      if GET, renders a form to get the old and new password details
+      if POST, redirects to sign in if the details were valid or back to reset_password if not valid
+    """
+    if request.method == "GET":
+        return render_template("reset_password.html")
+    else:
+        username = request.form["username"]
+        old_password = request.form["old_password"]
+        new_password = request.form["new_password"]
+        new_password_check = request.form["new_password_check"]
+        
+        conn = get_db_connection()
+        row = conn.execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
+        conn.close()
+        if new_password != new_password_check:
+            flash('The new passwords you entered do not match')
+            return render_template('reset_password.html')
+        if row is None:
+            flash('Sorry we do not recognise that user')
+            return render_template('reset_password.html')
+        
+        username_in_db = row[1]
+        salt = row[4]
+        password_hash_in_db = row[3]
+        old_pw_hash = sha256((salt + old_password).encode('utf-8')).hexdigest()
+        if old_pw_hash != password_hash_in_db:
+            flash('Sorry but your old password was not recognised')
+            return render_template('reset_password.html')
+        
+        new_password_hash = sha256((salt + new_password).encode('utf-8')).hexdigest()
+        
+        conn = get_db_connection()
+        curs = conn.cursor()
+        curs.execute("UPDATE users SET pw_hash = ? WHERE username = ?", (new_password_hash, username,))
+        conn.commit()
+        flash('Congratulations, your your password has been updated')
+        return redirect(url_for('sign_in'))
+
+@app.route("/sign_out", methods=("GET", "POST"))
+def sign_out():
+    """sets cookie values to empty string
+    Args:
+      None
+    Returns:
+      response with new cookie values
+    """
+    resp = make_response(render_template('index.html'))
+    resp.set_cookie('username', "")
+    resp.set_cookie('current_cookie', "")
+    return resp

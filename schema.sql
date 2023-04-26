@@ -1,4 +1,4 @@
-/*
+
 DROP TABLE IF EXISTS users;
 
 CREATE TABLE users (
@@ -7,9 +7,10 @@ CREATE TABLE users (
   email TEXT NOT NULL,
   pw_hash TEXT NOT NULL,
   salt TEXT NOT NULL,
-  current_cookie TEXT NOT NULL
+  current_cookie TEXT NOT NULL,
+  email_verification BOOLEAN NOT NULL DEFAULT 0
 );
-*/
+
 DROP TABLE IF EXISTS matches;
 
 CREATE TABLE matches (
