@@ -160,12 +160,10 @@ def put_results_into_db(username, competition, season):
     conn.close()
     return results
 
-def get_results_from_db(username, competition, season):
+def get_results_from_db(username):
     """gets results table from
     Args:
       username: users login name
-      competition: league(PL or ECL)
-      season: 2020 or 2021 etc.
     Returns:
       results table
     Raises:
@@ -325,7 +323,7 @@ def get_match_data():
         results = put_results_into_db(username, competition, season)
         return render_template('show_table.html', tables=[results.to_html(classes='data')], titles=results.columns.values)
 
-@app.route('/select_data_to_show', methods=("GET",))
+@app.route('//select_data_to_show', methods=("GET",))
 @check_login
 def select_data_to_show():
     """collects teams to plot
@@ -358,10 +356,8 @@ def show_plot_gd_matchday():
       renders html for show_plot_gd_matchday in base64 format
     """
     teams = request.form.getlist("team")
-    competition = request.form["competition"]
-    season = request.form["season"]
     username = request.cookies.get("username")
-    results = get_results_from_db(username, competition, season)
+    results = get_results_from_db(username)
     df_for_plot = results[results["team_name"].isin(teams)]
 
     # Create a figure canvas to hold the plot
@@ -405,7 +401,7 @@ def show_plot_gf_ga():
     competition = request.form["competition"]
     season = request.form["season"]
     username = request.cookies.get("username")
-    results = get_results_from_db(username, competition, season)
+    results = get_results_from_db(username)
     df_for_plot = results[results["team_name"].isin(teams)]
     fig = Figure()
     ax = fig.subplots()
@@ -434,7 +430,7 @@ def show_plot_gd_home_away():
     competition = request.form["competition"]
     season = request.form["season"]
     username = request.cookies.get("username")
-    results = get_results_from_db(username, competition, season)
+    results = get_results_from_db(username)
     df_for_plot = results[results["team_name"].isin(teams)]
     fig = Figure()
     ax = fig.subplots()

@@ -7,23 +7,7 @@
   <div style="position: relative">
     <div style="width: 50%; margin-left: 0; margin-right: auto; float: left">
       <div style="padding-top: 30px; padding-right: 30px; padding-bottom: 30px; padding-left: 30px; position: relative; margin-left: 0; margin-right: auto;">
-	     <div class="form-group">
-	       <label for="competition"> select a competition:</label>
-	         <select name="competition" id="competition">
-	           <option value="PL">English Premier League</option>
-	           <option value="ECL">English Championship League</option>
-	         </select>
-	     </div>
-	     <div class="form-group">
-	       <label for="season"> select a season:</label>
-	         <select name="season" id="season">
-	           <option value="2020"> 2020</option>
-	           <option value="2021"> 2021</option>
-	           <option value="2022"> 2022</option>
-	           <option value="2023"> 2023</option>
-	         </select>
-	     </div>
-	     <fieldset>
+         <fieldset>
             <legend>pick teams</legend>
             {% for team in teams %}
             <input type="checkbox" name="team" value="{{team}}"> {{team}}<br>
